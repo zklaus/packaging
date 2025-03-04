@@ -155,6 +155,7 @@ class TestRequirementParsing:
             "os_name == 'linux'",
             "'8' in platform.version",
             "'8' not in platform.version",
+            "free_threading == 'True'",
         ],
     )
     def test_valid_marker(self, marker: str) -> None:
