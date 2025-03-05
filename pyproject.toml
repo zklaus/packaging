@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 
 [project]
-name = "packaging"
+name = "packaging_ft"
 description = "Core utilities for Python packages"
 dynamic = ["version"]
 readme = "README.rst"
@@ -33,6 +33,9 @@ dependencies = []
 [project.urls]
 Documentation = "https://packaging.pypa.io/"
 Source = "https://github.com/pypa/packaging"
+
+[tool.flit.module]
+name = "packaging"
 
 
 [tool.flit.sdist]
