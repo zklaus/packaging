@@ -243,7 +243,7 @@ def default_environment() -> Environment:
     iver = format_full_version(sys.implementation.version)
     implementation_name = sys.implementation.name
     return {
-        "free_threading": "t" in sys.abiflags,
+        "free_threading": str("t" in sys.abiflags),
         "implementation_name": implementation_name,
         "implementation_version": iver,
         "os_name": os.name,
