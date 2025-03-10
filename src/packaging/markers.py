@@ -117,10 +117,11 @@ class Environment(TypedDict):
     was built.
     """
 
-    sys_config_abi_features: list[str]
+    sys_config_abi_features: str
     """
     A list of strings representing the ABI features supported by the Python
-    interpreter.
+    interpreter, joined by a single vertical bar (``|``) with no surrounding
+    whitespace.
     """
 
 
@@ -245,11 +246,11 @@ def format_full_version(info: sys._version_info) -> str:
     return version
 
 
-def get_abi_features() -> list[str]:
+def get_abi_features() -> str:
     abi_features = []
     if "t" in sys.abiflags:
         abi_features.append("free-threading")
-    return abi_features
+    return "|".join(abi_features)
 
 
 def default_environment() -> Environment:
