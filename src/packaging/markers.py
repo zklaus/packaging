@@ -117,6 +117,12 @@ class Environment(TypedDict):
     was built.
     """
 
+    sys_config_abi_features: list[str]
+    """
+    A list of strings representing the ABI features supported by the Python
+    interpreter.
+    """
+
 
 def _normalize_extra_values(results: Any) -> Any:
     """
@@ -239,11 +245,17 @@ def format_full_version(info: sys._version_info) -> str:
     return version
 
 
+def get_abi_features() -> list[str]:
+    abi_features = []
+    if "t" in sys.abiflags:
+        abi_features.append("free-threading")
+    return abi_features
+
+
 def default_environment() -> Environment:
     iver = format_full_version(sys.implementation.version)
     implementation_name = sys.implementation.name
     return {
-        "free_threading": str("t" in sys.abiflags),
         "implementation_name": implementation_name,
         "implementation_version": iver,
         "os_name": os.name,
@@ -255,6 +267,7 @@ def default_environment() -> Environment:
         "platform_python_implementation": platform.python_implementation(),
         "python_version": ".".join(platform.python_version_tuple()[:2]),
         "sys_platform": sys.platform,
+        "sysconfig_abi_features": get_abi_features(),
     }
 
 
