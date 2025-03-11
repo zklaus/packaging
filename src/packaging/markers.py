@@ -250,6 +250,10 @@ def get_abi_features() -> str:
     abi_features = []
     if "t" in sys.abiflags:
         abi_features.append("free-threading")
+    if "d" in sys.abiflags:
+        abi_features.append("debug")
+    is_64bit = sys.maxsize > 2 ** 32
+    abi_features.append("64-bit" if is_64bit else "32-bit")
     return "|".join(abi_features)
 
 
