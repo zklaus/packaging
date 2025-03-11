@@ -8,6 +8,7 @@ import operator
 import os
 import platform
 import sys
+import sysconfig
 from typing import Any, Callable, TypedDict, cast
 
 from ._parser import MarkerAtom, MarkerList, Op, Value, Variable
@@ -248,10 +249,11 @@ def format_full_version(info: sys._version_info) -> str:
 
 def get_abi_features() -> str:
     abi_features = []
-    if "t" in sys.abiflags:
+    if sysconfig.get_config_var("Py_GIL_DISABLED") == 1:
         abi_features.append("free-threading")
-    if "d" in sys.abiflags:
-        abi_features.append("debug")
+    if sys.platform != "win32":
+        if "d" in sys.abiflags:
+            abi_features.append("debug")
     is_64bit = sys.maxsize > 2 ** 32
     abi_features.append("64-bit" if is_64bit else "32-bit")
     return "|".join(abi_features)
