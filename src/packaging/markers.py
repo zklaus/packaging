@@ -106,6 +106,13 @@ class Environment(TypedDict):
     python_version: str
     """The Python version as string ``'major.minor'``."""
 
+    sys_abi_features: str
+    """
+    A list of strings representing the ABI features supported by the Python
+    interpreter, joined by a single vertical bar (``|``) with no surrounding
+    whitespace.
+    """
+
     sys_platform: str
     """
     This string contains a platform identifier that can be used to append
@@ -115,13 +122,6 @@ class Environment(TypedDict):
     returned by ``uname -s`` with the first part of the version as returned by
     ``uname -r`` appended, e.g. ``'sunos5'`` or ``'freebsd8'``, at the time when Python
     was built.
-    """
-
-    sys_config_abi_features: str
-    """
-    A list of strings representing the ABI features supported by the Python
-    interpreter, joined by a single vertical bar (``|``) with no surrounding
-    whitespace.
     """
 
 
@@ -267,8 +267,8 @@ def default_environment() -> Environment:
         "python_full_version": platform.python_version(),
         "platform_python_implementation": platform.python_implementation(),
         "python_version": ".".join(platform.python_version_tuple()[:2]),
+        "sys_abi_features": get_abi_features(),
         "sys_platform": sys.platform,
-        "sysconfig_abi_features": get_abi_features(),
     }
 
 
