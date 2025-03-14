@@ -68,6 +68,7 @@ DEFAULT_RULES: dict[str, str | re.Pattern[str]] = {
                 |platform[._](version|machine|python_implementation)
                 |python_implementation
                 |implementation_(name|version)
+                |sys_abi_features
                 |extra
             )\b
         """,
