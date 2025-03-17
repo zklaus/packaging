@@ -261,7 +261,7 @@ def get_abi_features() -> set[str]:
         abi_features.add("debug")
     is_64bit = sys.maxsize > 2 ** 32
     abi_features.add("64-bit" if is_64bit else "32-bit")
-    return abi_features
+    return frozenset(abi_features)
 
 
 def default_environment() -> Environment:
