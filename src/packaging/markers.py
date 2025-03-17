@@ -251,6 +251,8 @@ def get_abi_features() -> set[str]:
     abi_features = set()
     if sysconfig.get_config_var("Py_GIL_DISABLED") == 1:
         abi_features.add("free-threading")
+    else:
+        abi_features.add("gil-enabled")
     if sys.platform == "win32":
         is_debug = sysconfig.get_config_var("EXT_SUFFIX").startswith("_d.")
     else:
