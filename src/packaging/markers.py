@@ -248,6 +248,12 @@ def format_full_version(info: sys._version_info) -> str:
 
 
 def get_abi_features() -> set[str]:
+    try:
+        return sys.abi_features
+    except AttributeError:
+        # sys.abi_features was added in Python 3.XXX
+        # for earlier versions, we use the following fallback
+        pass
     abi_features = set()
     if sysconfig.get_config_var("Py_GIL_DISABLED") == 1:
         abi_features.add("free-threading")
