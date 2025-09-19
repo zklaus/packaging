@@ -8,6 +8,7 @@ import operator
 import os
 import platform
 import sys
+import sysconfig
 from typing import AbstractSet, Any, Callable, Literal, TypedDict, Union, cast
 
 from ._parser import MarkerAtom, MarkerList, Op, Value, Variable
@@ -108,6 +109,12 @@ class Environment(TypedDict):
 
     python_version: str
     """The Python version as string ``'major.minor'``."""
+
+    sys_abi_features: set[str]
+    """
+    A set of strings representing the ABI features supported by the Python
+    interpreter.
+    """
 
     sys_platform: str
     """
@@ -253,6 +260,29 @@ def format_full_version(info: sys._version_info) -> str:
     return version
 
 
+def get_abi_features() -> set[str]:
+    try:
+        return sys.abi_features
+    except AttributeError:
+        # sys.abi_features was added in Python 3.XXX
+        # for earlier versions, we use the following fallback
+        pass
+    abi_features = set()
+    if sysconfig.get_config_var("Py_GIL_DISABLED") == 1:
+        abi_features.add("free-threading")
+    else:
+        abi_features.add("gil-enabled")
+    if sys.platform == "win32":
+        is_debug = sysconfig.get_config_var("EXT_SUFFIX").startswith("_d.")
+    else:
+        is_debug = "d" in sys.abiflags
+    if is_debug:
+        abi_features.add("debug")
+    is_64bit = sys.maxsize > 2 ** 32
+    abi_features.add("64-bit" if is_64bit else "32-bit")
+    return frozenset(abi_features)
+
+
 def default_environment() -> Environment:
     iver = format_full_version(sys.implementation.version)
     implementation_name = sys.implementation.name
@@ -267,6 +297,7 @@ def default_environment() -> Environment:
         "python_full_version": platform.python_version(),
         "platform_python_implementation": platform.python_implementation(),
         "python_version": ".".join(platform.python_version_tuple()[:2]),
+        "sys_abi_features": get_abi_features(),
         "sys_platform": sys.platform,
     }
 
