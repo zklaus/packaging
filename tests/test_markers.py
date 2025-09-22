@@ -34,6 +34,7 @@ VARIABLES = [
     "python_full_version",
     "python_version",
     "platform_python_implementation",
+    "sys_abi_info",
     "sys_platform",
 ]
 
@@ -56,6 +57,7 @@ VALUES = [
     "freebsd",
     "literally any string can go here",
     "things @#4 dsfd (((",
+    " some::things ::may:: be :: segmented ",
 ]
 
 
@@ -314,6 +316,12 @@ class TestMarker:
             (
                 "extra == 'Different.punctuation..is...equal'",
                 {"extra": "different__punctuation_is_EQUAL"},
+                True,
+            ),
+            (f'"byteorder::{sys.byteorder}" in sys_abi_info', None, True),
+            (
+                '"pointer_bits ::  32" in sys_abi_info',
+                {"sys_abi_info": frozenset({"pointer_bits::32"})},
                 True,
             ),
         ],
