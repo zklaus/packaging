@@ -19,6 +19,7 @@ from packaging.markers import (
     UndefinedComparison,
     default_environment,
     format_full_version,
+    get_abi_info,
 )
 
 VARIABLES = [
@@ -125,6 +126,7 @@ class TestDefaultEnvironment:
             "platform_python_implementation": platform.python_implementation(),
             "python_version": ".".join(platform.python_version_tuple()[:2]),
             "sys_platform": sys.platform,
+            "sys_abi_info": get_abi_info(),
         }
 
     def test_multidigit_minor_version(self, monkeypatch):
