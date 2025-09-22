@@ -26,7 +26,7 @@ from ._parser import MarkerAtom, MarkerList, MarkerLogical, Op, Value, Variable
 from ._parser import parse_marker as _parse_marker
 from ._tokenizer import ParserSyntaxError
 from .specifiers import InvalidSpecifier, Specifier
-from .utils import canonicalize_name
+from .utils import canonicalize_name, normalize_segmented_value
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -233,6 +233,14 @@ def _normalize_extras(
         # Marker('"Foo" in extras') and Marker('"foo" in extras') must compare and
         # hash equal (the membership variable is always the right-hand operand).
         lhs = Value(canonicalize_name(lhs.value))
+    elif (
+        isinstance(rhs, Variable)
+        and rhs.value == "sys_abi_info"
+        and isinstance(lhs, Value)
+    ):
+        # PEP 780: ``sys_abi_info`` entries are ``name::value`` strings; normalize
+        # the membership literal so that it compares equal to the environment's.
+        lhs = Value(normalize_segmented_value(lhs.value))
     return lhs, op, rhs
 
 
