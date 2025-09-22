@@ -110,7 +110,7 @@ class Environment(TypedDict):
     python_version: str
     """The Python version as string ``'major.minor'``."""
 
-    sys_abi_features: set[str]
+    sys_abi_info: set[str]
     """
     A set of strings representing the ABI features supported by the Python
     interpreter.
@@ -260,27 +260,28 @@ def format_full_version(info: sys._version_info) -> str:
     return version
 
 
-def get_abi_features() -> set[str]:
+def get_abi_info() -> set[str]:
+    abi_info = set()
     try:
-        return sys.abi_features
+        for k, v in sys.abi_info.__dict__.items():
+            abi_info.add(f"{k}::{v}")
     except AttributeError:
-        # sys.abi_features was added in Python 3.XXX
+        # sys.abi_info was added in Python 3.15
         # for earlier versions, we use the following fallback
-        pass
-    abi_features = set()
-    if sysconfig.get_config_var("Py_GIL_DISABLED") == 1:
-        abi_features.add("free-threading")
-    else:
-        abi_features.add("gil-enabled")
-    if sys.platform == "win32":
-        is_debug = sysconfig.get_config_var("EXT_SUFFIX").startswith("_d.")
-    else:
-        is_debug = "d" in sys.abiflags
-    if is_debug:
-        abi_features.add("debug")
-    is_64bit = sys.maxsize > 2 ** 32
-    abi_features.add("64-bit" if is_64bit else "32-bit")
-    return frozenset(abi_features)
+        is_free_threaded = sysconfig.get_config_var("Py_GIL_DISABLED") == 1
+        abi_info.add(f"free_threaded::{is_free_threaded}")
+        if sys.platform == "win32":
+            is_debug = sysconfig.get_config_var("EXT_SUFFIX").startswith("_d.")
+        else:
+            is_debug = "d" in sys.abiflags
+        abi_info.add(f"debug::{is_debug}")
+        is_64bit = sys.maxsize > 2 ** 32
+        if is_64bit:
+            abi_info.add("pointer_bits::64")
+        else:
+            abi_info.add("pointer_bits::32")
+        abi_info.add(f"byteorder::{sys.byteorder}")
+    return frozenset(abi_info)
 
 
 def default_environment() -> Environment:
@@ -297,7 +298,7 @@ def default_environment() -> Environment:
         "python_full_version": platform.python_version(),
         "platform_python_implementation": platform.python_implementation(),
         "python_version": ".".join(platform.python_version_tuple()[:2]),
-        "sys_abi_features": get_abi_features(),
+        "sys_abi_info": get_abi_info(),
         "sys_platform": sys.platform,
     }
 
