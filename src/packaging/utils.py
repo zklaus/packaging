@@ -55,6 +55,33 @@ def is_normalized_name(name: str) -> bool:
     return _normalized_regex.match(name) is not None
 
 
+_separator_regex = re.compile(r"[ \t]*::[ \t]*")
+
+
+def normalize_segmented_value(value: str) -> str:
+    """
+    Normalize a value that may be segmented by '::' separators.
+
+    Each segment is stripped of leading and trailing whitespace, and multiple
+    internal whitespace characters are replaced by a single space.
+
+    For example, the following are equivalent:
+
+    - "  foo  ::  bar baz  "
+    - "foo::bar   baz"
+    - "  foo::bar baz"
+
+    All normalize to "foo::bar baz".
+    """
+    segments = _separator_regex.split(value)
+    normalized_segments = []
+    for segment in segments:
+        # Replace multiple internal whitespace with a single space.
+        segment = re.sub(r"[ \t]+", " ", segment.strip())
+        normalized_segments.append(segment)
+    return "::".join(normalized_segments)
+
+
 @functools.singledispatch
 def canonicalize_version(
     version: Version | str, *, strip_trailing_zero: bool = True

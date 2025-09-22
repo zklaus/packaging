@@ -8,13 +8,14 @@ import operator
 import os
 import platform
 import sys
+import sysconfig
 from typing import AbstractSet, Any, Callable, Literal, TypedDict, Union, cast
 
 from ._parser import MarkerAtom, MarkerList, Op, Value, Variable
 from ._parser import parse_marker as _parse_marker
 from ._tokenizer import ParserSyntaxError
 from .specifiers import InvalidSpecifier, Specifier
-from .utils import canonicalize_name
+from .utils import canonicalize_name, normalize_segmented_value
 
 __all__ = [
     "EvaluateContext",
@@ -109,6 +110,12 @@ class Environment(TypedDict):
     python_version: str
     """The Python version as string ``'major.minor'``."""
 
+    sys_abi_info: set[str]
+    """
+    A set of strings representing the ABI features supported by the Python
+    interpreter.
+    """
+
     sys_platform: str
     """
     This string contains a platform identifier that can be used to append
@@ -121,18 +128,26 @@ class Environment(TypedDict):
     """
 
 
-def _normalize_extra_values(results: Any) -> Any:
-    """
-    Normalize extra values.
-    """
+NORMALIZERS: dict[str, list[Callable[[str], str]]] = {
+    "extra": [canonicalize_name],
+    "sys_abi_info": [normalize_segmented_value],
+}
+
+def _normalize_values(results: Any) -> Any:
     if isinstance(results[0], tuple):
         lhs, op, rhs = results[0]
-        if isinstance(lhs, Variable) and lhs.value == "extra":
-            normalized_extra = canonicalize_name(rhs.value)
-            rhs = Value(normalized_extra)
-        elif isinstance(rhs, Variable) and rhs.value == "extra":
-            normalized_extra = canonicalize_name(lhs.value)
-            lhs = Value(normalized_extra)
+        if isinstance(lhs, Variable) and isinstance(rhs, Value):
+            variable = lhs.value
+            value = rhs.value
+            for normalizer in NORMALIZERS.get(variable, []):
+                value = normalizer(value)
+            rhs = Value(value)
+        elif isinstance(rhs, Variable) and isinstance(lhs, Value):
+            variable = rhs.value
+            value = lhs.value
+            for normalizer in NORMALIZERS.get(variable, []):
+                value = normalizer(value)
+            lhs = Value(value)
         results[0] = lhs, op, rhs
     return results
 
@@ -253,6 +268,30 @@ def format_full_version(info: sys._version_info) -> str:
     return version
 
 
+def get_abi_info() -> set[str]:
+    abi_info = set()
+    try:
+        for k, v in sys.abi_info.__dict__.items():
+            abi_info.add(f"{k}::{v}")
+    except AttributeError:
+        # sys.abi_info was added in Python 3.15
+        # for earlier versions, we use the following fallback
+        is_free_threaded = sysconfig.get_config_var("Py_GIL_DISABLED") == 1
+        abi_info.add(f"free_threaded::{is_free_threaded}")
+        if sys.platform == "win32":
+            is_debug = sysconfig.get_config_var("EXT_SUFFIX").startswith("_d.")
+        else:
+            is_debug = "d" in sys.abiflags
+        abi_info.add(f"debug::{is_debug}")
+        is_64bit = sys.maxsize > 2 ** 32
+        if is_64bit:
+            abi_info.add("pointer_bits::64")
+        else:
+            abi_info.add("pointer_bits::32")
+        abi_info.add(f"byteorder::{sys.byteorder}")
+    return frozenset(abi_info)
+
+
 def default_environment() -> Environment:
     iver = format_full_version(sys.implementation.version)
     implementation_name = sys.implementation.name
@@ -267,6 +306,7 @@ def default_environment() -> Environment:
         "python_full_version": platform.python_version(),
         "platform_python_implementation": platform.python_implementation(),
         "python_version": ".".join(platform.python_version_tuple()[:2]),
+        "sys_abi_info": get_abi_info(),
         "sys_platform": sys.platform,
     }
 
@@ -277,7 +317,7 @@ class Marker:
         #       packaging.requirements.Requirement. If any additional logic is
         #       added here, make sure to mirror/adapt Requirement.
         try:
-            self._markers = _normalize_extra_values(_parse_marker(marker))
+            self._markers = _normalize_values(_parse_marker(marker))
             # The attribute `_markers` can be described in terms of a recursive type:
             # MarkerList = List[Union[Tuple[Node, ...], str, MarkerList]]
             #

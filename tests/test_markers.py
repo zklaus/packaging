@@ -19,6 +19,7 @@ from packaging.markers import (
     UndefinedComparison,
     default_environment,
     format_full_version,
+    get_abi_info,
 )
 
 VARIABLES = [
@@ -33,6 +34,7 @@ VARIABLES = [
     "python_full_version",
     "python_version",
     "platform_python_implementation",
+    "sys_abi_info",
     "sys_platform",
 ]
 
@@ -55,6 +57,7 @@ VALUES = [
     "freebsd",
     "literally any string can go here",
     "things @#4 dsfd (((",
+    " some::things ::may:: be :: segmented ",
 ]
 
 
@@ -125,6 +128,7 @@ class TestDefaultEnvironment:
             "platform_python_implementation": platform.python_implementation(),
             "python_version": ".".join(platform.python_version_tuple()[:2]),
             "sys_platform": sys.platform,
+            "sys_abi_info": get_abi_info(),
         }
 
     def test_multidigit_minor_version(self, monkeypatch):
@@ -312,6 +316,12 @@ class TestMarker:
             (
                 "extra == 'Different.punctuation..is...equal'",
                 {"extra": "different__punctuation_is_EQUAL"},
+                True,
+            ),
+            (f'"byteorder::{sys.byteorder}" in sys_abi_info', None, True),
+            (
+                '"pointer_bits ::  32" in sys_abi_info',
+                {"sys_abi_info": frozenset({"pointer_bits::32"})},
                 True,
             ),
         ],
