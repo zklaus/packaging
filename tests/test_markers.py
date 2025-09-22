@@ -35,6 +35,7 @@ from packaging.markers import (
     _cached_default_environment,
     _format_full_version,
     default_environment,
+    get_abi_info,
     prepare_environment,
 )
 from packaging.utils import canonicalize_name
@@ -237,6 +238,7 @@ class TestDefaultEnvironment:
             "platform_python_implementation": platform.python_implementation(),
             "python_version": ".".join(platform.python_version_tuple()[:2]),
             "sys_platform": sys.platform,
+            "sys_abi_info": get_abi_info(),
         }
 
     def test_multidigit_minor_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
