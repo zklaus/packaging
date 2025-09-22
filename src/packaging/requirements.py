@@ -7,7 +7,7 @@ from typing import Iterator
 
 from ._parser import parse_requirement as _parse_requirement
 from ._tokenizer import ParserSyntaxError
-from .markers import Marker, _normalize_extra_values
+from .markers import Marker, _normalize_values
 from .specifiers import SpecifierSet
 from .utils import canonicalize_name
 
@@ -44,7 +44,7 @@ class Requirement:
         self.marker: Marker | None = None
         if parsed.marker is not None:
             self.marker = Marker.__new__(Marker)
-            self.marker._markers = _normalize_extra_values(parsed.marker)
+            self.marker._markers = _normalize_values(parsed.marker)
 
     def _iter_parts(self, name: str) -> Iterator[str]:
         yield name

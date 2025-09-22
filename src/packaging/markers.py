@@ -15,7 +15,7 @@ from ._parser import MarkerAtom, MarkerList, Op, Value, Variable
 from ._parser import parse_marker as _parse_marker
 from ._tokenizer import ParserSyntaxError
 from .specifiers import InvalidSpecifier, Specifier
-from .utils import canonicalize_name
+from .utils import canonicalize_name, normalize_segmented_value
 
 __all__ = [
     "EvaluateContext",
@@ -128,18 +128,26 @@ class Environment(TypedDict):
     """
 
 
-def _normalize_extra_values(results: Any) -> Any:
-    """
-    Normalize extra values.
-    """
+NORMALIZERS: dict[str, list[Callable[[str], str]]] = {
+    "extra": [canonicalize_name],
+    "sys_abi_info": [normalize_segmented_value],
+}
+
+def _normalize_values(results: Any) -> Any:
     if isinstance(results[0], tuple):
         lhs, op, rhs = results[0]
-        if isinstance(lhs, Variable) and lhs.value == "extra":
-            normalized_extra = canonicalize_name(rhs.value)
-            rhs = Value(normalized_extra)
-        elif isinstance(rhs, Variable) and rhs.value == "extra":
-            normalized_extra = canonicalize_name(lhs.value)
-            lhs = Value(normalized_extra)
+        if isinstance(lhs, Variable) and isinstance(rhs, Value):
+            variable = lhs.value
+            value = rhs.value
+            for normalizer in NORMALIZERS.get(variable, []):
+                value = normalizer(value)
+            rhs = Value(value)
+        elif isinstance(rhs, Variable) and isinstance(lhs, Value):
+            variable = rhs.value
+            value = lhs.value
+            for normalizer in NORMALIZERS.get(variable, []):
+                value = normalizer(value)
+            lhs = Value(value)
         results[0] = lhs, op, rhs
     return results
 
@@ -309,7 +317,7 @@ class Marker:
         #       packaging.requirements.Requirement. If any additional logic is
         #       added here, make sure to mirror/adapt Requirement.
         try:
-            self._markers = _normalize_extra_values(_parse_marker(marker))
+            self._markers = _normalize_values(_parse_marker(marker))
             # The attribute `_markers` can be described in terms of a recursive type:
             # MarkerList = List[Union[Tuple[Node, ...], str, MarkerList]]
             #
