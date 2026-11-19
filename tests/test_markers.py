@@ -563,6 +563,48 @@ class TestMarker:
                 {"sys_abi_info": frozenset({"pointer_bits::32"})},
                 True,
             ),
+            (
+                '"pointer_bits\t::\t32" in sys_abi_info',
+                {"sys_abi_info": frozenset({"pointer_bits::32"})},
+                True,
+            ),
+            # Only whitespace adjacent to ``::`` is ignored; anything else is
+            # significant, so these strings are simply absent from the set.
+            (
+                '" pointer_bits::32" in sys_abi_info',
+                {"sys_abi_info": frozenset({"pointer_bits::32"})},
+                False,
+            ),
+            (
+                '"pointer_bits::32 " in sys_abi_info',
+                {"sys_abi_info": frozenset({"pointer_bits::32"})},
+                False,
+            ),
+            (
+                '"pointer _bits::32" in sys_abi_info',
+                {"sys_abi_info": frozenset({"pointer_bits::32"})},
+                False,
+            ),
+            (
+                '"pointer_bits::3 2" not in sys_abi_info',
+                {"sys_abi_info": frozenset({"pointer_bits::32"})},
+                True,
+            ),
+            (
+                '"compiler :: GCC 12" in sys_abi_info',
+                {"sys_abi_info": frozenset({"compiler::GCC 12"})},
+                True,
+            ),
+            (
+                '"compiler::GCC  12" in sys_abi_info',
+                {"sys_abi_info": frozenset({"compiler::GCC 12"})},
+                False,
+            ),
+            (
+                "os_name == 'nope' or 'debug :: False' in sys_abi_info",
+                {"os_name": "posix", "sys_abi_info": frozenset({"debug::False"})},
+                True,
+            ),
         ],
     )
     def test_evaluates(

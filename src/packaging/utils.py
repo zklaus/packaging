@@ -160,24 +160,19 @@ def normalize_segmented_value(value: str) -> str:
     """
     Normalize a value that may be segmented by '::' separators.
 
-    Each segment is stripped of leading and trailing whitespace, and multiple
-    internal whitespace characters are replaced by a single space.
+    Spaces and tabs directly adjacent to a '::' separator are removed. All
+    other whitespace, both inside a segment and at the start or end of the
+    value, is significant and left untouched.
 
-    For example, the following are equivalent:
+    For example, the following are equivalent and normalize to "foo::bar":
 
-    - "  foo  ::  bar baz  "
-    - "foo::bar   baz"
-    - "  foo::bar baz"
+    - "foo::bar"
+    - "foo :: bar"
+    - "foo  ::\tbar"
 
-    All normalize to "foo::bar baz".
+    whereas " foo::bar", "foo::bar " and "foo::b ar" are all left as they are.
     """
-    segments = _separator_regex.split(value)
-    normalized_segments = []
-    for segment in segments:
-        # Replace multiple internal whitespace with a single space.
-        segment = re.sub(r"[ \t]+", " ", segment.strip())
-        normalized_segments.append(segment)
-    return "::".join(normalized_segments)
+    return _separator_regex.sub("::", value)
 
 
 def canonicalize_version(
