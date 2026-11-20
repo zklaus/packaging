@@ -37,8 +37,8 @@ from packaging.markers import (
     UndefinedEnvironmentName,
     _cached_default_environment,
     _format_full_version,
+    _get_abi_info,
     default_environment,
-    get_abi_info,
     prepare_environment,
 )
 from packaging.utils import canonicalize_name
@@ -243,7 +243,7 @@ class TestDefaultEnvironment:
             "platform_python_implementation": platform.python_implementation(),
             "python_version": ".".join(platform.python_version_tuple()[:2]),
             "sys_platform": sys.platform,
-            "sys_abi_info": get_abi_info(),
+            "sys_abi_info": _get_abi_info(),
         }
 
     def test_multidigit_minor_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -286,7 +286,7 @@ class TestGetAbiInfo:
         # The fallbacks must not be consulted for fields that are present.
         self._config_vars(monkeypatch, Py_GIL_DISABLED=0, Py_DEBUG=0)
 
-        assert get_abi_info() == {
+        assert _get_abi_info() == {
             "pointer_bits::128",
             "free_threaded::True",
             "debug::True",
@@ -298,7 +298,7 @@ class TestGetAbiInfo:
         self._implementation(monkeypatch, "cpython")
         self._config_vars(monkeypatch, Py_GIL_DISABLED=1, Py_DEBUG=0)
 
-        assert get_abi_info() == {
+        assert _get_abi_info() == {
             f"pointer_bits::{8 * struct.calcsize('P')}",
             "free_threaded::True",
             "debug::False",
@@ -311,7 +311,7 @@ class TestGetAbiInfo:
         self._implementation(monkeypatch, "cpython")
         self._config_vars(monkeypatch, Py_GIL_DISABLED=1, Py_DEBUG=0)
 
-        assert get_abi_info() == {
+        assert _get_abi_info() == {
             "pointer_bits::128",
             "free_threaded::True",
             "debug::True",
@@ -330,7 +330,7 @@ class TestGetAbiInfo:
         )
         monkeypatch.setattr(sys, "abi_info", abi_info, raising=False)
 
-        assert get_abi_info() == {
+        assert _get_abi_info() == {
             "pointer_bits::64",
             "free_threaded::False",
             "debug::False",
@@ -353,7 +353,7 @@ class TestGetAbiInfo:
         )
         monkeypatch.setattr(sys, "abi_info", abi_info, raising=False)
 
-        assert get_abi_info() == {
+        assert _get_abi_info() == {
             "pointer_bits::64",
             "free_threaded::False",
             "debug::False",
@@ -368,7 +368,7 @@ class TestGetAbiInfo:
         )
         monkeypatch.setattr(sys, "abi_info", abi_info, raising=False)
 
-        assert f"pointer_bits::{8 * struct.calcsize('P')}" in get_abi_info()
+        assert f"pointer_bits::{8 * struct.calcsize('P')}" in _get_abi_info()
 
     @pytest.mark.parametrize(
         ("config_vars", "expected"),
@@ -389,8 +389,8 @@ class TestGetAbiInfo:
         self._implementation(monkeypatch, "cpython")
         self._config_vars(monkeypatch, **config_vars)
 
-        assert f"free_threaded::{expected}" in get_abi_info()
-        assert f"free_threaded::{not expected}" not in get_abi_info()
+        assert f"free_threaded::{expected}" in _get_abi_info()
+        assert f"free_threaded::{not expected}" not in _get_abi_info()
 
     @pytest.mark.parametrize(
         ("config_vars", "gettotalrefcount", "suffixes", "expected"),
@@ -421,8 +421,8 @@ class TestGetAbiInfo:
             monkeypatch.setattr(sys, "gettotalrefcount", lambda: 0, raising=False)
         monkeypatch.setattr(importlib.machinery, "EXTENSION_SUFFIXES", suffixes)
 
-        assert f"debug::{expected}" in get_abi_info()
-        assert f"debug::{not expected}" not in get_abi_info()
+        assert f"debug::{expected}" in _get_abi_info()
+        assert f"debug::{not expected}" not in _get_abi_info()
 
     def test_fallbacks_on_other_implementations(
         self, monkeypatch: pytest.MonkeyPatch
@@ -433,7 +433,7 @@ class TestGetAbiInfo:
         self._config_vars(monkeypatch, Py_GIL_DISABLED=1, Py_DEBUG=1)
         monkeypatch.setattr(sys, "gettotalrefcount", lambda: 0, raising=False)
 
-        assert get_abi_info() == {
+        assert _get_abi_info() == {
             f"pointer_bits::{8 * struct.calcsize('P')}",
             "free_threaded::False",
             "debug::False",
@@ -444,7 +444,7 @@ class TestGetAbiInfo:
         abi_info = default_environment()["sys_abi_info"]
 
         assert isinstance(abi_info, frozenset)
-        assert abi_info == get_abi_info()
+        assert abi_info == _get_abi_info()
         for name in ("pointer_bits", "free_threaded", "debug", "byteorder"):
             assert sum(entry.startswith(f"{name}::") for entry in abi_info) == 1
 

@@ -483,7 +483,7 @@ _ABI_INFO_FALLBACKS: Final[dict[str, Callable[[], bool | int | str]]] = {
 }
 
 
-def get_abi_info() -> frozenset[str]:
+def _get_abi_info() -> frozenset[str]:
     """Return the ABI features of the running interpreter for ``sys_abi_info``.
 
     Every field of ``sys.abi_info`` whose value is a bool, int or str is encoded
@@ -525,7 +525,7 @@ def _cached_default_environment() -> Environment:
         "python_full_version": platform.python_version(),
         "platform_python_implementation": platform.python_implementation(),
         "python_version": ".".join(platform.python_version_tuple()[:2]),
-        "sys_abi_info": get_abi_info(),
+        "sys_abi_info": _get_abi_info(),
         "sys_platform": sys.platform,
     }
 
