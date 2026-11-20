@@ -6,6 +6,7 @@ from __future__ import annotations
 
 __lazy_modules__ = {
     "platform",
+    "struct",
     f"{__spec__.parent}._parser",
     f"{__spec__.parent}._tokenizer",
     f"{__spec__.parent}.specifiers",
@@ -16,6 +17,7 @@ import functools
 import operator
 import os
 import platform
+import struct
 import sys
 from collections.abc import Callable
 from collections.abc import Set as AbstractSet
@@ -25,7 +27,7 @@ from ._parser import MarkerAtom, MarkerList, MarkerLogical, Op, Value, Variable
 from ._parser import parse_marker as _parse_marker
 from ._tokenizer import ParserSyntaxError
 from .specifiers import InvalidSpecifier, Specifier
-from .utils import canonicalize_name
+from .utils import _normalize_segmented_value, canonicalize_name
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -187,6 +189,12 @@ class Environment(TypedDict):
     python_version: str
     """The Python version as string ``'major.minor'``."""
 
+    sys_abi_info: frozenset[str]
+    """
+    The ABI features of the Python interpreter, as a set of ``"name::value"``
+    strings such as ``"free_threaded::False"`` or ``"pointer_bits::64"``.
+    """
+
     sys_platform: str
     """
     This string contains a platform identifier that can be used to append
@@ -226,6 +234,14 @@ def _normalize_extras(
         # Marker('"Foo" in extras') and Marker('"foo" in extras') must compare and
         # hash equal (the membership variable is always the right-hand operand).
         lhs = Value(canonicalize_name(lhs.value))
+    elif (
+        isinstance(rhs, Variable)
+        and rhs.value == "sys_abi_info"
+        and isinstance(lhs, Value)
+    ):
+        # PEP 780: ``sys_abi_info`` entries are ``name::value`` strings; normalize
+        # the membership literal so that it compares equal to the environment's.
+        lhs = Value(_normalize_segmented_value(lhs.value))
     return lhs, op, rhs
 
 
@@ -424,6 +440,70 @@ def _format_full_version(info: sys._version_info) -> str:
     return version
 
 
+def _abi_pointer_bits() -> int:
+    return 8 * struct.calcsize("P")
+
+
+def _abi_byteorder() -> str:
+    return sys.byteorder
+
+
+def _abi_free_threaded() -> bool:
+    if sys.implementation.name != "cpython":
+        return False
+    import sysconfig  # noqa: PLC0415
+
+    # An undefined configuration variable is ``None``, which counts as false.
+    return bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+
+
+def _abi_debug() -> bool:
+    if sys.implementation.name != "cpython":
+        return False
+    import sysconfig  # noqa: PLC0415
+
+    py_debug = sysconfig.get_config_var("Py_DEBUG")
+    if py_debug is not None:
+        return bool(py_debug)
+    # Windows builds do not always define ``Py_DEBUG``.
+    import importlib.machinery  # noqa: PLC0415
+
+    return (
+        hasattr(sys, "gettotalrefcount")
+        or "_d.pyd" in importlib.machinery.EXTENSION_SUFFIXES
+    )
+
+
+# PEP 780: the ABI features that are always provided, with the rules used to
+# determine them when ``sys.abi_info`` (Python 3.15+) does not have the field.
+_ABI_INFO_FALLBACKS: Final[dict[str, Callable[[], bool | int | str]]] = {
+    "pointer_bits": _abi_pointer_bits,
+    "free_threaded": _abi_free_threaded,
+    "debug": _abi_debug,
+    "byteorder": _abi_byteorder,
+}
+
+
+def _get_abi_info() -> frozenset[str]:
+    """Return the ABI features of the running interpreter for ``sys_abi_info``.
+
+    Every field of ``sys.abi_info`` whose value is a bool, int or str is encoded
+    as a ``"name::value"`` string; fields with values of any other type are
+    ignored. The features in ``_ABI_INFO_FALLBACKS`` are determined
+    individually by other means when ``sys.abi_info`` does not provide them.
+    """
+    abi_info = getattr(sys, "abi_info", None)
+    features: dict[str, bool | int | str] = {
+        name: value
+        for name, value in (vars(abi_info) if abi_info is not None else {}).items()
+        if isinstance(value, (bool, int, str))
+    }
+    for name, fallback in _ABI_INFO_FALLBACKS.items():
+        if name not in features:
+            features[name] = fallback()
+    return frozenset(f"{name}::{value}" for name, value in features.items())
+
+
 @functools.cache
 def _cached_default_environment() -> Environment:
     """Build the default marker environment for the current Python process.
@@ -446,6 +526,7 @@ def _cached_default_environment() -> Environment:
         "python_full_version": platform.python_version(),
         "platform_python_implementation": platform.python_implementation(),
         "python_version": ".".join(platform.python_version_tuple()[:2]),
+        "sys_abi_info": _get_abi_info(),
         "sys_platform": sys.platform,
     }
 
@@ -455,7 +536,8 @@ def default_environment() -> Environment:
 
     This is the base environment used by :meth:`Marker.evaluate`. A fresh copy
     is returned on every call so callers may freely mutate the result; a shallow
-    copy suffices because all values are immutable strings.
+    copy suffices because all values are immutable (strings, and a frozenset
+    of strings for ``sys_abi_info``).
 
     .. versionchanged:: 26.3
         The environment is computed once per process and cached, since it is

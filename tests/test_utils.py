@@ -11,6 +11,7 @@ from packaging.utils import (
     InvalidName,
     InvalidSdistFilename,
     InvalidWheelFilename,
+    _normalize_segmented_value,
     canonicalize_name,
     canonicalize_version,
     is_normalized_name,
@@ -78,6 +79,30 @@ def test_is_normalized_name(name: str, expected: str) -> None:
     assert is_normalized_name(expected)
     if name != expected:
         assert not is_normalized_name(name)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("foo::bar", "foo::bar"),
+        ("foo :: bar", "foo::bar"),
+        ("foo  ::\tbar", "foo::bar"),
+        ("a :: b::c ::d", "a::b::c::d"),
+        # Whitespace that is not adjacent to a separator is left alone.
+        (" foo::bar", " foo::bar"),
+        ("foo::bar ", "foo::bar "),
+        ("foo :: b ar", "foo::b ar"),
+        ("foo :: b  ar", "foo::b  ar"),
+        ("no separator ", "no separator "),
+        # Only spaces and tabs count as whitespace here.
+        ("foo\n::\nbar", "foo\n::\nbar"),
+        ("", ""),
+        (" :: ", "::"),
+    ],
+)
+def test_normalize_segmented_value(value: str, expected: str) -> None:
+    assert _normalize_segmented_value(value) == expected
+    assert _normalize_segmented_value(expected) == expected
 
 
 @pytest.mark.parametrize(

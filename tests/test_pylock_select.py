@@ -57,6 +57,14 @@ _py312_linux = Platform(
         "platform_python_implementation": "CPython",
         "python_version": "3.12",
         "sys_platform": "linux",
+        "sys_abi_info": frozenset(
+            {
+                "pointer_bits::64",
+                "free_threaded::False",
+                "debug::False",
+                "byteorder::little",
+            }
+        ),
     },
 )
 

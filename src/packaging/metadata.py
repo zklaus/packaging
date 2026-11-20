@@ -156,6 +156,9 @@ class RawMetadata(TypedDict, total=False):
 
     # Metadata 2.6 - PEP 808 (no new fields, behavior change for Dynamic)
 
+    # Metadata 2.7 - PEP 780 (no new fields, ``sys_abi_info`` environment marker
+    # allowed in Requires-Dist)
+
 
 # 'keywords' is special as it's a string in the core metadata spec, but we
 # represent it as a list.
@@ -555,9 +558,10 @@ _VALID_METADATA_VERSIONS = [
     "2.4",
     "2.5",
     "2.6",
+    "2.7",
 ]
 _MetadataVersion = Literal[
-    "1.0", "1.1", "1.2", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6"
+    "1.0", "1.1", "1.2", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7"
 ]
 
 _REQUIRED_ATTRS = frozenset(["metadata_version", "name", "version"])

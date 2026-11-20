@@ -142,6 +142,55 @@ to :meth:`Marker.evaluate_prepared` must hold normalized names.
 
 .. versionadded:: 26.4
 
+ABI features with ``sys_abi_info``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:pep:`780` adds the ``sys_abi_info`` marker variable, which describes the ABI
+of the Python interpreter. Its value is a set of ``"name::value"`` strings, one
+for each ABI feature, and it is tested with ``in`` and ``not in``:
+
+.. doctest::
+
+    >>> from packaging.markers import Marker
+    >>> environment = {
+    ...     "sys_abi_info": frozenset(
+    ...         {
+    ...             "free_threaded::True",
+    ...             "debug::False",
+    ...             "pointer_bits::64",
+    ...             "byteorder::little",
+    ...         }
+    ...     )
+    ... }
+    >>> marker = Marker('"free_threaded::True" in sys_abi_info')
+    >>> marker.evaluate(environment=environment)
+    True
+    >>> marker = Marker('"pointer_bits::32" not in sys_abi_info')
+    >>> marker.evaluate(environment=environment)
+    True
+    >>> # A string that is not in the set is simply absent
+    >>> Marker('"new_feature::True" in sys_abi_info').evaluate(environment=environment)
+    False
+
+Spaces and tabs next to the ``::`` separator are ignored. Any other whitespace
+is significant, so a string with leading, trailing or inner whitespace does not
+match:
+
+.. doctest::
+
+    >>> Marker('"free_threaded :: True" in sys_abi_info')
+    <Marker('"free_threaded::True" in sys_abi_info')>
+    >>> Marker('" free_threaded::True" in sys_abi_info').evaluate(environment=environment)
+    False
+
+In the default environment, the value reflects the fields of
+:data:`sys.abi_info` that are booleans, integers or strings. The features
+``pointer_bits``, ``free_threaded``, ``debug`` and ``byteorder`` are always
+present: on interpreters where :data:`sys.abi_info` does not provide them
+(it was added in Python 3.15), they are determined by other means.
+
+.. versionadded:: 26.4
+
 
 Reference
 ---------

@@ -153,6 +153,28 @@ def is_normalized_name(name: str) -> bool:
     return _normalized_regex.fullmatch(name) is not None
 
 
+_separator_regex = re.compile(r"[ \t]*::[ \t]*")
+
+
+def _normalize_segmented_value(value: str) -> str:
+    """
+    Normalize a value that may be segmented by '::' separators.
+
+    Spaces and tabs directly adjacent to a '::' separator are removed. All
+    other whitespace, both inside a segment and at the start or end of the
+    value, is significant and left untouched.
+
+    For example, the following are equivalent and normalize to "foo::bar":
+
+    - "foo::bar"
+    - "foo :: bar"
+    - "foo  ::\tbar"
+
+    whereas " foo::bar", "foo::bar " and "foo::b ar" are all left as they are.
+    """
+    return _separator_regex.sub("::", value)
+
+
 def canonicalize_version(
     version: Version | str, *, strip_trailing_zero: bool = True
 ) -> str:
