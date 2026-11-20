@@ -26,7 +26,7 @@ from ._parser import MarkerAtom, MarkerList, MarkerLogical, Op, Value, Variable
 from ._parser import parse_marker as _parse_marker
 from ._tokenizer import ParserSyntaxError
 from .specifiers import InvalidSpecifier, Specifier
-from .utils import canonicalize_name, normalize_segmented_value
+from .utils import _normalize_segmented_value, canonicalize_name
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -240,7 +240,7 @@ def _normalize_extras(
     ):
         # PEP 780: ``sys_abi_info`` entries are ``name::value`` strings; normalize
         # the membership literal so that it compares equal to the environment's.
-        lhs = Value(normalize_segmented_value(lhs.value))
+        lhs = Value(_normalize_segmented_value(lhs.value))
     return lhs, op, rhs
 
 

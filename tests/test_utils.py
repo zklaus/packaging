@@ -11,10 +11,10 @@ from packaging.utils import (
     InvalidName,
     InvalidSdistFilename,
     InvalidWheelFilename,
+    _normalize_segmented_value,
     canonicalize_name,
     canonicalize_version,
     is_normalized_name,
-    normalize_segmented_value,
     parse_sdist_filename,
     parse_wheel_filename,
 )
@@ -101,8 +101,8 @@ def test_is_normalized_name(name: str, expected: str) -> None:
     ],
 )
 def test_normalize_segmented_value(value: str, expected: str) -> None:
-    assert normalize_segmented_value(value) == expected
-    assert normalize_segmented_value(expected) == expected
+    assert _normalize_segmented_value(value) == expected
+    assert _normalize_segmented_value(expected) == expected
 
 
 @pytest.mark.parametrize(

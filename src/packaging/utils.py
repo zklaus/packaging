@@ -156,7 +156,7 @@ def is_normalized_name(name: str) -> bool:
 _separator_regex = re.compile(r"[ \t]*::[ \t]*")
 
 
-def normalize_segmented_value(value: str) -> str:
+def _normalize_segmented_value(value: str) -> str:
     """
     Normalize a value that may be segmented by '::' separators.
 
