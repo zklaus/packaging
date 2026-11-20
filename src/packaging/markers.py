@@ -6,6 +6,7 @@ from __future__ import annotations
 
 __lazy_modules__ = {
     "platform",
+    "struct",
     f"{__spec__.parent}._parser",
     f"{__spec__.parent}._tokenizer",
     f"{__spec__.parent}.specifiers",
