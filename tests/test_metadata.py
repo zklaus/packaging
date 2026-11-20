@@ -696,7 +696,8 @@ class TestMetadata:
         assert getattr(meta, attribute) == values
 
     @pytest.mark.parametrize(
-        "version", ["1.0", "1.1", "1.2", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6"]
+        "version",
+        ["1.0", "1.1", "1.2", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7"],
     )
     def test_valid_metadata_version(self, version: str) -> None:
         meta = metadata.Metadata.from_raw({"metadata_version": version}, validate=False)
@@ -914,6 +915,25 @@ class TestMetadata:
 
         with pytest.raises(metadata.InvalidMetadata):
             meta.dynamic  # noqa: B018
+
+    def test_pep780_sys_abi_info_in_requires_dist(self) -> None:
+        """PEP 780 introduces metadata 2.7 for ``sys_abi_info`` in
+        ``Requires-Dist``."""
+        requirement = 'cython>3.1.0a1; "free_threaded::True" in sys_abi_info'
+        raw: RawMetadata = {
+            "metadata_version": "2.7",
+            "name": "packaging",
+            "version": "1.0.0",
+            "requires_dist": [requirement],
+        }
+
+        meta = metadata.Metadata.from_raw(raw, validate=True)
+        assert meta.metadata_version == "2.7"
+        assert meta.requires_dist == [requirements.Requirement(requirement)]
+
+        rfc822 = meta.as_rfc822()
+        assert ("metadata-version", "2.7") in rfc822.items()
+        assert ("requires-dist", requirement) in rfc822.items()
 
     def test_pep808_dynamic_with_static_values(self) -> None:
         """PEP 808 allows list/table fields to have static values
