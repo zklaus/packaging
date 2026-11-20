@@ -4,6 +4,12 @@ Changelog
 *unreleased*
 ~~~~~~~~~~~~
 
+Features:
+
+* PEP 780: add the ``sys_abi_info`` environment marker, which exposes the ABI
+  features of the interpreter (such as ``"free_threaded::True"``) for use with
+  ``in`` and ``not in``, and accept ``Metadata-Version: 2.7``.
+
 Removals:
 
 * Drop support for EOL Python 3.9. (:pull:`1263`)
