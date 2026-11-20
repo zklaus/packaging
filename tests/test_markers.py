@@ -5,13 +5,16 @@
 from __future__ import annotations
 
 import functools
+import importlib.machinery
 import itertools
 import operator
 import os
 import pickle
 import platform
+import struct
 import sys
-from types import MappingProxyType
+import sysconfig
+from types import MappingProxyType, SimpleNamespace
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 from unittest import mock
 
@@ -262,6 +265,188 @@ class TestDefaultEnvironment:
     def tests_when_releaselevel_not_final(self) -> None:
         v = FakeVersionInfo(3, 4, 2, "beta", 4)
         assert _format_full_version(v) == "3.4.2b4"  # type: ignore[arg-type]
+
+
+class TestGetAbiInfo:
+    """PEP 780: the value of the ``sys_abi_info`` marker variable."""
+
+    @staticmethod
+    def _config_vars(monkeypatch: pytest.MonkeyPatch, **config_vars: object) -> None:
+        monkeypatch.setattr(sysconfig, "get_config_var", config_vars.get)
+
+    @staticmethod
+    def _implementation(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+        monkeypatch.setattr(sys, "implementation", SimpleNamespace(name=name))
+
+    def test_uses_sys_abi_info(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        abi_info = SimpleNamespace(
+            pointer_bits=128, free_threaded=True, debug=True, byteorder="middle"
+        )
+        monkeypatch.setattr(sys, "abi_info", abi_info, raising=False)
+        # The fallbacks must not be consulted for fields that are present.
+        self._config_vars(monkeypatch, Py_GIL_DISABLED=0, Py_DEBUG=0)
+
+        assert get_abi_info() == {
+            "pointer_bits::128",
+            "free_threaded::True",
+            "debug::True",
+            "byteorder::middle",
+        }
+
+    def test_without_sys_abi_info(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delattr(sys, "abi_info", raising=False)
+        self._implementation(monkeypatch, "cpython")
+        self._config_vars(monkeypatch, Py_GIL_DISABLED=1, Py_DEBUG=0)
+
+        assert get_abi_info() == {
+            f"pointer_bits::{8 * struct.calcsize('P')}",
+            "free_threaded::True",
+            "debug::False",
+            f"byteorder::{sys.byteorder}",
+        }
+
+    def test_falls_back_per_field(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        abi_info = SimpleNamespace(pointer_bits=128, debug=True)
+        monkeypatch.setattr(sys, "abi_info", abi_info, raising=False)
+        self._implementation(monkeypatch, "cpython")
+        self._config_vars(monkeypatch, Py_GIL_DISABLED=1, Py_DEBUG=0)
+
+        assert get_abi_info() == {
+            "pointer_bits::128",
+            "free_threaded::True",
+            "debug::True",
+            f"byteorder::{sys.byteorder}",
+        }
+
+    def test_includes_unknown_fields(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        abi_info = SimpleNamespace(
+            pointer_bits=64,
+            free_threaded=False,
+            debug=False,
+            byteorder="little",
+            new_flag=False,
+            new_number=3,
+            new_name="value",
+        )
+        monkeypatch.setattr(sys, "abi_info", abi_info, raising=False)
+
+        assert get_abi_info() == {
+            "pointer_bits::64",
+            "free_threaded::False",
+            "debug::False",
+            "byteorder::little",
+            "new_flag::False",
+            "new_number::3",
+            "new_name::value",
+        }
+
+    def test_ignores_unsupported_types(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        abi_info = SimpleNamespace(
+            pointer_bits=64,
+            free_threaded=False,
+            debug=False,
+            byteorder="little",
+            none=None,
+            real=1.5,
+            sequence=("a", "b"),
+            raw=b"bytes",
+        )
+        monkeypatch.setattr(sys, "abi_info", abi_info, raising=False)
+
+        assert get_abi_info() == {
+            "pointer_bits::64",
+            "free_threaded::False",
+            "debug::False",
+            "byteorder::little",
+        }
+
+    def test_unsupported_type_of_known_field_falls_back(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        abi_info = SimpleNamespace(
+            pointer_bits=None, free_threaded=False, debug=False, byteorder="little"
+        )
+        monkeypatch.setattr(sys, "abi_info", abi_info, raising=False)
+
+        assert f"pointer_bits::{8 * struct.calcsize('P')}" in get_abi_info()
+
+    @pytest.mark.parametrize(
+        ("config_vars", "expected"),
+        [
+            ({}, False),
+            ({"Py_GIL_DISABLED": None}, False),
+            ({"Py_GIL_DISABLED": 0}, False),
+            ({"Py_GIL_DISABLED": 1}, True),
+        ],
+    )
+    def test_free_threaded_fallback(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        config_vars: dict[str, object],
+        expected: bool,
+    ) -> None:
+        monkeypatch.delattr(sys, "abi_info", raising=False)
+        self._implementation(monkeypatch, "cpython")
+        self._config_vars(monkeypatch, **config_vars)
+
+        assert f"free_threaded::{expected}" in get_abi_info()
+        assert f"free_threaded::{not expected}" not in get_abi_info()
+
+    @pytest.mark.parametrize(
+        ("config_vars", "gettotalrefcount", "suffixes", "expected"),
+        [
+            ({"Py_DEBUG": 0}, False, [".so"], False),
+            ({"Py_DEBUG": 1}, False, [".so"], True),
+            # A defined ``Py_DEBUG`` wins over the other indicators.
+            ({"Py_DEBUG": 0}, True, ["_d.pyd", ".pyd"], False),
+            ({}, False, [".pyd"], False),
+            ({}, True, [".pyd"], True),
+            ({}, False, ["_d.pyd", ".pyd"], True),
+            ({}, False, ["_d.cp313-win_amd64.pyd"], False),
+        ],
+    )
+    def test_debug_fallback(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        config_vars: dict[str, object],
+        gettotalrefcount: bool,
+        suffixes: list[str],
+        expected: bool,
+    ) -> None:
+        monkeypatch.delattr(sys, "abi_info", raising=False)
+        self._implementation(monkeypatch, "cpython")
+        self._config_vars(monkeypatch, **config_vars)
+        monkeypatch.delattr(sys, "gettotalrefcount", raising=False)
+        if gettotalrefcount:
+            monkeypatch.setattr(sys, "gettotalrefcount", lambda: 0, raising=False)
+        monkeypatch.setattr(importlib.machinery, "EXTENSION_SUFFIXES", suffixes)
+
+        assert f"debug::{expected}" in get_abi_info()
+        assert f"debug::{not expected}" not in get_abi_info()
+
+    def test_fallbacks_on_other_implementations(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delattr(sys, "abi_info", raising=False)
+        self._implementation(monkeypatch, "pypy")
+        # None of these may be taken into account outside of CPython.
+        self._config_vars(monkeypatch, Py_GIL_DISABLED=1, Py_DEBUG=1)
+        monkeypatch.setattr(sys, "gettotalrefcount", lambda: 0, raising=False)
+
+        assert get_abi_info() == {
+            f"pointer_bits::{8 * struct.calcsize('P')}",
+            "free_threaded::False",
+            "debug::False",
+            f"byteorder::{sys.byteorder}",
+        }
+
+    def test_default_environment_value(self) -> None:
+        abi_info = default_environment()["sys_abi_info"]
+
+        assert isinstance(abi_info, frozenset)
+        assert abi_info == get_abi_info()
+        for name in ("pointer_bits", "free_threaded", "debug", "byteorder"):
+            assert sum(entry.startswith(f"{name}::") for entry in abi_info) == 1
 
 
 class TestMarker:

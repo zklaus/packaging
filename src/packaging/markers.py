@@ -16,8 +16,8 @@ import functools
 import operator
 import os
 import platform
+import struct
 import sys
-import sysconfig
 from collections.abc import Callable
 from collections.abc import Set as AbstractSet
 from typing import TYPE_CHECKING, Final, Literal, TypedDict, cast
@@ -188,10 +188,10 @@ class Environment(TypedDict):
     python_version: str
     """The Python version as string ``'major.minor'``."""
 
-    sys_abi_info: set[str]
+    sys_abi_info: frozenset[str]
     """
-    A set of strings representing the ABI features supported by the Python
-    interpreter.
+    The ABI features of the Python interpreter, as a set of ``"name::value"``
+    strings such as ``"free_threaded::False"`` or ``"pointer_bits::64"``.
     """
 
     sys_platform: str
@@ -439,28 +439,68 @@ def _format_full_version(info: sys._version_info) -> str:
     return version
 
 
-def get_abi_info() -> set[str]:
-    abi_info = set()
-    try:
-        for k, v in sys.abi_info.__dict__.items():
-            abi_info.add(f"{k}::{v}")
-    except AttributeError:
-        # sys.abi_info was added in Python 3.15
-        # for earlier versions, we use the following fallback
-        is_free_threaded = sysconfig.get_config_var("Py_GIL_DISABLED") == 1
-        abi_info.add(f"free_threaded::{is_free_threaded}")
-        if sys.platform == "win32":
-            is_debug = sysconfig.get_config_var("EXT_SUFFIX").startswith("_d.")
-        else:
-            is_debug = "d" in sys.abiflags
-        abi_info.add(f"debug::{is_debug}")
-        is_64bit = sys.maxsize > 2 ** 32
-        if is_64bit:
-            abi_info.add("pointer_bits::64")
-        else:
-            abi_info.add("pointer_bits::32")
-        abi_info.add(f"byteorder::{sys.byteorder}")
-    return frozenset(abi_info)
+def _abi_pointer_bits() -> int:
+    return 8 * struct.calcsize("P")
+
+
+def _abi_byteorder() -> str:
+    return sys.byteorder
+
+
+def _abi_free_threaded() -> bool:
+    if sys.implementation.name != "cpython":
+        return False
+    import sysconfig  # noqa: PLC0415
+
+    # An undefined configuration variable is ``None``, which counts as false.
+    return bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+
+
+def _abi_debug() -> bool:
+    if sys.implementation.name != "cpython":
+        return False
+    import sysconfig  # noqa: PLC0415
+
+    py_debug = sysconfig.get_config_var("Py_DEBUG")
+    if py_debug is not None:
+        return bool(py_debug)
+    # Windows builds do not always define ``Py_DEBUG``.
+    import importlib.machinery  # noqa: PLC0415
+
+    return (
+        hasattr(sys, "gettotalrefcount")
+        or "_d.pyd" in importlib.machinery.EXTENSION_SUFFIXES
+    )
+
+
+# PEP 780: the ABI features that are always provided, with the rules used to
+# determine them when ``sys.abi_info`` (Python 3.15+) does not have the field.
+_ABI_INFO_FALLBACKS: Final[dict[str, Callable[[], bool | int | str]]] = {
+    "pointer_bits": _abi_pointer_bits,
+    "free_threaded": _abi_free_threaded,
+    "debug": _abi_debug,
+    "byteorder": _abi_byteorder,
+}
+
+
+def get_abi_info() -> frozenset[str]:
+    """Return the ABI features of the running interpreter for ``sys_abi_info``.
+
+    Every field of ``sys.abi_info`` whose value is a bool, int or str is encoded
+    as a ``"name::value"`` string; fields with values of any other type are
+    ignored. The features in ``_ABI_INFO_FALLBACKS`` are determined
+    individually by other means when ``sys.abi_info`` does not provide them.
+    """
+    abi_info = getattr(sys, "abi_info", None)
+    features: dict[str, bool | int | str] = {
+        name: value
+        for name, value in (vars(abi_info) if abi_info is not None else {}).items()
+        if isinstance(value, (bool, int, str))
+    }
+    for name, fallback in _ABI_INFO_FALLBACKS.items():
+        if name not in features:
+            features[name] = fallback()
+    return frozenset(f"{name}::{value}" for name, value in features.items())
 
 
 @functools.cache
@@ -495,7 +535,8 @@ def default_environment() -> Environment:
 
     This is the base environment used by :meth:`Marker.evaluate`. A fresh copy
     is returned on every call so callers may freely mutate the result; a shallow
-    copy suffices because all values are immutable strings.
+    copy suffices because all values are immutable (strings, and a frozenset
+    of strings for ``sys_abi_info``).
 
     .. versionchanged:: 26.3
         The environment is computed once per process and cached, since it is
